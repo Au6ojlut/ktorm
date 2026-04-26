@@ -1,4 +1,7 @@
 
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
+
 group = rootProject.group
 version = rootProject.version
 
@@ -35,17 +38,18 @@ tasks {
 
     compileKotlin {
         dependsOn(codegen)
+    }
 
-        kotlinOptions {
-            jvmTarget = "1.8"
-            allWarningsAsErrors = true
-            freeCompilerArgs = listOf("-Xexplicit-api=strict")
+    withType<KotlinJvmCompile>().configureEach {
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_1_8)
         }
     }
 
-    compileTestKotlin {
-        kotlinOptions {
-            jvmTarget = "1.8"
+    compileKotlin {
+        compilerOptions {
+            allWarningsAsErrors.set(true)
+            freeCompilerArgs.add("-Xexplicit-api=strict")
         }
     }
 

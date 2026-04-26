@@ -2,12 +2,14 @@ package org.ktorm.ksp.compiler
 
 import com.tschuchort.compiletesting.*
 import org.intellij.lang.annotations.Language
+import org.jetbrains.kotlin.compiler.plugin.ExperimentalCompilerApi
 import org.junit.After
 import org.junit.Before
 import org.ktorm.database.Database
 import org.ktorm.database.use
 import java.lang.reflect.InvocationTargetException
 
+@OptIn(ExperimentalCompilerApi::class)
 abstract class BaseKspTest {
     lateinit var database: Database
 
@@ -41,12 +43,18 @@ abstract class BaseKspTest {
 
     protected fun kspFailing(message: String, @Language("kotlin") code: String, vararg options: Pair<String, String>) {
         val result = compile(code, mapOf(*options))
-        assert(result.exitCode == KotlinCompilation.ExitCode.COMPILATION_ERROR)
-        assert(result.messages.contains("e: Error occurred in KSP, check log for detail"))
-        assert(result.messages.contains(message))
+
+        // thrown exceptions leads to internal error, so we also accept internal error here.
+        assert(result.exitCode in listOf(KotlinCompilation.ExitCode.COMPILATION_ERROR, KotlinCompilation.ExitCode.INTERNAL_ERROR)) {
+            "Expected compilation error but actually ${result.exitCode} with messages ${result.messages}"
+        }
+        assert(result.messages.contains(message)) {
+            "Expected error message '$message' but actually ${result.messages}"
+        }
     }
 
     protected fun runKotlin(@Language("kotlin") code: String, vararg options: Pair<String, String>) {
+
         val result = compile(code, mapOf(*options))
         assert(result.exitCode == KotlinCompilation.ExitCode.OK)
 
@@ -59,8 +67,7 @@ abstract class BaseKspTest {
         }
     }
 
-    private fun compile(@Language("kotlin") code: String, options: Map<String, String>): KotlinCompilation.Result {
-        @Language("kotlin")
+    private fun compile(@Language("kotlin") code: String, options: Map<String, String>): JvmCompilationResult {
         val header = """
             import java.math.*
             import java.sql.*
@@ -95,15 +102,18 @@ abstract class BaseKspTest {
 
     private fun createCompilation(source: SourceFile, options: Map<String, String>): KotlinCompilation {
         return KotlinCompilation().apply {
+            useKsp2()
             sources = listOf(source)
             verbose = false
             messageOutputStream = System.out
             inheritClassPath = true
-            allWarningsAsErrors = true
-            symbolProcessorProviders = listOf(KtormProcessorProvider())
+            // Unable to supress IDENTITY EQUALITY warnings
+            allWarningsAsErrors = false
+            symbolProcessorProviders = mutableListOf(KtormProcessorProvider())
             kspIncremental = true
             kspWithCompilation = true
-            kspArgs += options
+            kspProcessorOptions += options
+            kotlincArguments += listOf("-Xwarning-level=IDENTITY_SENSITIVE_OPERATIONS_WITH_VALUE_TYPE:disabled")  // suppress Identity equality warning
         }
     }
 

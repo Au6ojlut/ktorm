@@ -21,22 +21,35 @@ import com.pinterest.ktlint.cli.ruleset.core.api.RuleSetProviderV3
 import com.pinterest.ktlint.rule.engine.api.Code
 import com.pinterest.ktlint.rule.engine.api.EditorConfigDefaults
 import com.pinterest.ktlint.rule.engine.api.KtLintRuleEngine
+import com.pinterest.ktlint.rule.engine.core.api.AutocorrectDecision
+import com.pinterest.ktlint.ruleset.standard.rules.FunctionSignatureRule.Companion.FORCE_MULTILINE_WHEN_PARAMETER_COUNT_GREATER_OR_EQUAL_THAN_PROPERTY
 import org.ec4j.core.EditorConfigLoader
+import org.ec4j.core.PropertyTypeRegistry
 import org.ec4j.core.Resource.Resources
+import org.ec4j.core.model.Version
 import java.util.*
 
 internal class KtLintCodeFormatter(val environment: SymbolProcessorEnvironment) : CodeFormatter {
-    private val ktLintRuleEngine = KtLintRuleEngine(
-        ruleProviders = ServiceLoader
-            .load(RuleSetProviderV3::class.java, javaClass.classLoader)
-            .flatMap { it.getRuleProviders() }
-            .toSet(),
-        editorConfigDefaults = EditorConfigDefaults(
-            EditorConfigLoader.default_().load(
-                Resources.ofClassPath(javaClass.classLoader, "/ktorm-ksp-compiler/.editorconfig", Charsets.UTF_8)
+
+    private val propertyRegistry = PropertyTypeRegistry
+        .builder()
+        .defaults()
+        .apply {
+            setOf(FORCE_MULTILINE_WHEN_PARAMETER_COUNT_GREATER_OR_EQUAL_THAN_PROPERTY.type).forEach { type(it) }
+        }.build()
+
+    private val ktLintRuleEngine =
+        KtLintRuleEngine(
+            ruleProviders = ServiceLoader
+                .load(RuleSetProviderV3::class.java, javaClass.classLoader)
+                .flatMap { it.getRuleProviders() }
+                .toSet(),
+            editorConfigDefaults = EditorConfigDefaults(
+                EditorConfigLoader.of(Version.CURRENT, propertyRegistry).load(
+                    Resources.ofClassPath(javaClass.classLoader, "/ktorm-ksp-compiler/.editorconfig", Charsets.UTF_8)
+                )
             )
         )
-    )
 
     override fun format(fileName: String, code: String): String {
         try {
@@ -50,7 +63,9 @@ internal class KtLintCodeFormatter(val environment: SymbolProcessorEnvironment) 
                 .replace(Regex("""\s+=\s+"""), " = ")
                 .replace("import org.ktorm.ksp.`annotation`", "import org.ktorm.ksp.annotation")
 
-            return ktLintRuleEngine.format(Code.fromSnippet(snippet))
+            return ktLintRuleEngine.format(
+                Code.fromSnippet(snippet),
+                callback = { AutocorrectDecision.ALLOW_AUTOCORRECT })
         } catch (e: Throwable) {
             environment.logger.exception(e)
             return code

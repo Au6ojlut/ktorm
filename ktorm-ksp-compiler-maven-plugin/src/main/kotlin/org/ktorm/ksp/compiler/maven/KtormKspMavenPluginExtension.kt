@@ -16,7 +16,6 @@
 
 package org.ktorm.ksp.compiler.maven
 
-import com.google.devtools.ksp.KspCliOption
 import org.apache.maven.artifact.resolver.ArtifactResolutionRequest
 import org.apache.maven.execution.MavenSession
 import org.apache.maven.plugin.MojoExecution
